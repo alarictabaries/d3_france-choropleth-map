@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<style>
+    @import url('https://rsms.me/inter/inter.css');
+    html { font-family: 'Inter', sans-serif; }
+    @supports (font-variation-settings: normal) {
+        html { font-family: 'Inter var', sans-serif; }
+    }
+
+    .countries {
+        fill: none;
+        stroke: #fff;
+        stroke-linejoin: round;
+    }
+    .legendThreshold {
+        font-size: 12px;
+        font-family: sans-serif;
+    }
+    .caption {
+        font-family: Inter;
+        fill: rgb(15 23 42);
+        text-anchor: start;
+        font-weight: 600;
+    }
+    .label {
+        font-family: Inter;
+        fill: rgb(15 23 42);
+    }
+    .dep {
+        cursor: pointer;
+    }
+</style>
+<div class="map relative inline-flex flex-col m-4">
+    <div class="title font-semibold py-2 px-2 text-xs flex justify-center">
+        Taux d'incidence par département
+    </div>
+<svg width="500" height="450"></svg>
+</div>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.24.0/d3-legend.js"></script>
+<script>
+    var svg = d3.select("svg"),
+        width = +svg.attr("width"),
+        height = +svg.attr("height");
+
+    var path = d3.geoPath();
+    var projection = d3.geoMercator()
+        .center([3, 47])                // GPS of location to zoom on
+        .scale(1450)                       // This is like the zoom
+        .translate([ svg.attr("width")/2, (svg.attr("height")-100)/2 ])
+    var path = d3.geoPath()
+        .projection(projection);
+
+    var data = new Map();
+    var colorScheme = d3.schemeReds[6];
+    colorScheme.unshift("#eee")
+    var colorScale = d3.scaleThreshold()
+        .domain([1000, 6000, 11000, 26000, 101000, 1001000])
+        .range(colorScheme);
+
+    var g = svg.append("g")
+        .attr("class", "legendThreshold")
+        .attr("transform", "translate(" + (svg.attr("width") - 100) + "," +  ((svg.attr("height")/2) - 126) + " )");
+    g.append("text")
+        .attr("class", "caption")
+        .attr("x", 0)
+        .attr("y", -6)
+        .text("Incidence");
+    var labels = ['0', '1-5', '6-10', '11-25', '26-100', '101-1000', '> 1000'];
+    var legend = d3.legendColor()
+        .labels(function (d) { return labels[d.i]; })
+        .shapePadding(4)
+        .scale(colorScale);
+    svg.select(".legendThreshold")
+        .call(legend);
+
+    var Tooltip = d3.select(".map")
+        .append("div")
+        .style("opacity", 0)
+        .style("position", "absolute")
+        .attr("class", "tooltip")
+        .style("background-color", "white")
+        .style("border", "solid")
+        .style("border-width", "1px")
+        .style("border-color", "rgb(148 163 184)")
+        .style("color", "rgb(15 23 42)")
+        .style("border-radius", "0.125rem")
+        .style("padding", "5px")
+
+    var mouseover = function(event, d) {
+        Tooltip
+            .style("opacity", 1)
+        d3.select(this)
+            //.style("stroke", "#000")
+            .style("opacity", 1)
+    }
+    var mousemove = function(event, d) {
+        Tooltip
+            .html("<span style='font-weight: 600'>" + d.properties.libgeo + "</span><br />" + d.total + "/100k hab.")
+            .style("font-size", "12px")
+            .style("left", (d3.pointer(event)[0]+16) + "px")
+            .style("top", (d3.pointer(event)[1]+16) + "px")
+    }
+    var mouseleave = function(event, d) {
+        Tooltip
+            .style("opacity", 0)
+        d3.select(this)
+            .style("opacity", 1)
+            //.style("stroke-width", 1)
+            //.style("stroke", "#fff")
+    }
+
+    var files = ["departements-drom.json", "covid.json"];
+    var promises = [];
+
+    files.forEach(function(url) {
+        promises.push(d3.json(url))
+    });
+
+    Promise.all(promises).then(function(data) {
+        ready(data[0], data[1])
+    });
+
+    function ready(topo, cs) {
+        // Draw the map
+        console.log(topo);
+        svg.append("g")
+            .attr("class", "countries")
+            .selectAll("path")
+            .data(topo.features)
+            .enter().append("path")
+            .attr("class", "dep")
+            .attr("fill", function (d){
+                // Pull data for this country
+                d.total = cs.find(obj => {
+                    return obj.code.toString() === d.properties.dep;
+                }).total || 0;
+                // Set the color
+                return colorScale(d.total);
+            })
+            .attr("d", path)
+            .on("mouseover", mouseover)
+            .on("mousemove", mousemove)
+            .on("mouseleave", mouseleave);
+
+    }
+
+</script>
